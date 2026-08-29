@@ -15,26 +15,21 @@ Diagnóstico as-is (S3) vs contrato to-be (samples): ver `reports/gold_as_is_vs_
 
 ## Target (modelagem)
 
-- **Tabela:** `alunos_features`
 - **Coluna:** `alfabetizado` (`0.0` / `1.0`)
-- **Granularidade:** aluno (`id_aluno`)
+- **Env:** `GOLD_TABLE=alunos_features` (ou `alunos_analytic`)
 
-## Leakage candidates (não usar como feature)
+## Leakage (excluir do modelo)
 
-- `nivel_alfabetizacao` — derivado da mesma avaliação
-- Agregados do **mesmo ano** que reproduzem o resultado (`taxa_*` no nível já conhecido do aluno)
-- IDs e metadados de pipeline: `id_aluno`, `_ingestion_*`, `_silver_*`, `_gold_*`, `_batch_id`, `_source_table`, `_join_match`
+- `id_aluno`, metadados `_silver_*` / `_gold_*`
 
-## Features úteis (candidatas)
+## Feature opcional (Gold Fase 2)
 
-- Território: `sigla_uf`, `nome_regiao`, `rede`, `capital_uf`, `amazonia_legal`
-- Metas: `meta_alfabetizacao_2024`… (cuidado com ano da predição)
-- Socioeconomia: `populacao`, `pib_per_capita`, `ivs*`
-- Histórico: `lag1_*` (preferível — menor risco de leakage temporal)
+- `nivel_alfabetizacao` — incluir em X quando disponível na tabela ML
 
 ## Env
 
 ```env
 GOLD_TABLE=alunos_features
 GOLD_YEAR=2024
+EDA_N_ROWS=5000
 ```
