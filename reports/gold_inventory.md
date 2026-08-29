@@ -4,8 +4,10 @@ Path: `s3://{DATALAKE_BUCKET}/gold/br_inep_alfabetizacao/`
 
 Each table is Delta Lake style: `_delta_log/`, `ano=2023/`, `ano=2024/`.
 
-| Table | Grain | Role | Local sample (approx.) |
-|-------|-------|------|------------------------|
+Diagnóstico as-is (S3) vs contrato to-be (samples): ver `reports/gold_as_is_vs_to_be.md`.
+
+| Table | Grain | Role | S3 (aprox.) |
+|-------|-------|------|-------------|
 | `alunos_features` | aluno | **ML fact** — target `alfabetizado` | ~2.1M rows, 78 cols |
 | `contexto_territorio` | município × rede | contexto socioeconômico / lags | ~5.3k rows, 81 cols |
 | `indicador_crianca_alfabetizada_municipio` | município × rede | indicador + metas municipais | ~6.5k rows, 44 cols |
