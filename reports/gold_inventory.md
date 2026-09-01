@@ -4,14 +4,17 @@ Path: `s3://{DATALAKE_BUCKET}/gold/br_inep_alfabetizacao/`
 
 Each table is Delta Lake style: `_delta_log/`, `ano=2023/`, `ano=2024/`.
 
-Diagnóstico as-is (S3) vs contrato to-be (samples): ver `reports/gold_as_is_vs_to_be.md`.
+Diagnóstico as-is (S3) vs contrato to-be: ver `reports/gold_as_is_vs_to_be.md`.
 
-| Table | Grain | Role | S3 (aprox.) |
-|-------|-------|------|-------------|
-| `alunos_features` | aluno | **ML fact** — target `alfabetizado` | ~2.1M rows, 78 cols |
-| `contexto_territorio` | município × rede | contexto socioeconômico / lags | ~5.3k rows, 81 cols |
-| `indicador_crianca_alfabetizada_municipio` | município × rede | indicador + metas municipais | ~6.5k rows, 44 cols |
-| `indicador_crianca_alfabetizada_uf` | UF × rede | indicador + metas estaduais | ~51 rows, 37 cols |
+As partições guardam parquet de batches antigos até um `VACUUM`. O loader resolve os
+arquivos ativos pelo `_delta_log` — listagem crua do prefixo devolve dados obsoletos.
+
+| Table | Grain | Role | S3 (`ano=2024`) |
+|-------|-------|------|-----------------|
+| `alunos_features` | aluno | **ML fact** — target `alfabetizado` | ~2.1M rows, 79 cols |
+| `contexto_territorio` | município × rede | contexto socioeconômico / lags | 6.543 rows, 81 cols |
+| `indicador_crianca_alfabetizada_municipio` | município × rede | indicador + metas municipais | 6.543 rows, 44 cols |
+| `indicador_crianca_alfabetizada_uf` | UF × rede | indicador + metas estaduais | 51 rows, 37 cols |
 
 ## Target (modelagem)
 

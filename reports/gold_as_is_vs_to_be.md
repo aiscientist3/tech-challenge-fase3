@@ -1,75 +1,75 @@
-# Gold — as-is (S3) vs to-be (contrato alvo)
+# Gold — as-is (S3) vs contrato alvo
 
-Bucket: `tech-challenge-2-datalake-prod`  
-Prefix: `gold/br_inep_alfabetizacao/`  
+Bucket: `tech-challenge-2-datalake-prod`
+Prefix: `gold/br_inep_alfabetizacao/`
 Região: `us-east-1`
 
-Os arquivos `*_sample.parquet` (Downloads) são o **contrato alvo** (como deve ficar), não o estado atual do S3.
+Snapshot avaliado: `_gold_batch_id=1a06cc53-5440-40c5-91b1-c670bc3bbd5d` (`2026-09-01T22:45`), Delta version 9.
 
 ## Tabelas
 
-| Tabela | Partições | Observação |
-|--------|-----------|------------|
-| `alunos_features` | `ano=2023`, `ano=2024` | Fato ML (~2.1M × 78 em 2024) |
-| `contexto_territorio` | `ano=2023`, `ano=2024` | ~5.3k × 81 |
-| `indicador_crianca_alfabetizada_municipio` | `ano=2023`, `ano=2024` | várias parts |
-| `indicador_crianca_alfabetizada_uf` | `ano=2023`, `ano=2024` | várias parts |
+| Tabela | Partições | Snapshot atual (`ano=2024`) |
+|--------|-----------|------------------------------|
+| `alunos_features` | `ano=2023`, `ano=2024` | fato ML, 79 colunas |
+| `contexto_territorio` | `ano=2023`, `ano=2024` | 6.543 linhas × 81 |
+| `indicador_crianca_alfabetizada_municipio` | `ano=2023`, `ano=2024` | 6.543 × 44 |
+| `indicador_crianca_alfabetizada_uf` | `ano=2023`, `ano=2024` | 51 × 37 |
 
 Coluna `ano` **não** vem no parquet (só no path da partição).
 
-## Diagnóstico as-is (S3 prod)
+## Leitura: sempre pelo `_delta_log`
 
-### `rede` inconsistente (bloqueia o join)
+As tabelas são Delta. Quando a Fase 2 reescreve uma partição, o parquet antigo **continua no S3** como tombstone até um `VACUUM`. Em `ano=2024` chegaram a coexistir 5 arquivos de `alunos_features`, sendo 1 ativo.
 
-| Tabela | Valores atuais |
-|--------|----------------|
-| `alunos_features` | códigos `"2"`, `"3"`, `"4"` |
-| `contexto_territorio` | só texto `"municipal"` |
-| indicadores | códigos `"2"`, `"3"` |
+Listar o prefixo com `list_objects_v2` e ler o primeiro arquivo devolve um batch obsoleto — foi a causa dos NaN reportados em `populacao`, `pib*`, `uf_*` e `brasil_meta_*`, e também de duplicatas aparentes em `contexto_territorio` (batches empilhados). O loader (`src/preprocessing/load_gold.py`) resolve os arquivos ativos via `DeltaTable.file_uris()`.
 
-- Join cru `(id_municipio, rede)` aluno → contexto: **0%**
-- Após mapear `3→municipal` / `2→estadual`: ~**83–85%** (contexto ainda não tem outras redes)
-- Enriquecimento no fato (`populacao`, `pib_*`, `ivs*`, `lag1_*`, `nome_municipio`, `_join_match`): **~100% NaN**
+## Estado atual (validado no snapshot)
 
-### O que já está ok no S3
-
-- `id_municipio`: string com 7 dígitos
+- `rede` em texto (`municipal`, `estadual`, `privada`) em todas as tabelas, inclusive `indicador_crianca_alfabetizada_uf`
+- `id_municipio` string 7 dígitos
+- `contexto_territorio` no grão `(id_municipio, rede)` — 6.543 linhas para 6.543 chaves, sem duplicata
+- `_join_match = True` em 100% da amostra de 5.000 alunos
+- Enriquecimento materializado no fato: `populacao`, `pib`, `pib_per_capita`, `nome_municipio`, `sigla_uf`, `uf_*`, `brasil_meta_*`, `lag1_*`
 - Target `alfabetizado` (`0.0` / `1.0`) presente
-- Partições 2023/2024 existentes
 
-## Contrato to-be (samples alvo)
+## Missing remanescente em `alunos_features`
 
-Referência: `alunos_features_sample.parquet`, `contexto_territorio_sample.parquet`, indicadores `*_sample.parquet`.
+| Coluna | Missing | Natureza |
+|--------|---------|----------|
+| `lag1_proporcao_aluno_nivel_0..8`, `lag1_uf_proporcao_aluno_nivel_0..8` | 100% | fonte INEP não publicou proporções por nível em 2023 (ver abaixo) |
+| `ivs` | 21,3% | cobertura IPEA/AVS por município |
+| `meta_alfabetizacao_2024` | 16,3% | cobertura de metas municipais INEP |
+| `meta_alfabetizacao_2025..2030`, `nivel_alfabetizacao`, `regiao_municipio` | 15,3% | idem |
+| `ivs_infraestrutura_urbana` | 15,2% | cobertura IPEA |
+| `peso_aluno` | 11,5% | microdado INEP |
+| `ivs_capital_humano` | 9,2% | cobertura IPEA |
+| `lag1_taxa_alfabetizacao`, `lag1_media_portugues` | 2,5% | sem ano anterior para o município |
+| `uf_meta_alfabetizacao_2024`, `lag1_uf_*` | 2,3% | cobertura de metas por UF |
+| `ivs_renda_trabalho` | 0,2% | cobertura IPEA |
+| `socio_ano_ref` | 0,02% | cobertura IPEA |
 
-| Regra | Esperado |
-|-------|----------|
-| `rede` | texto padronizado (`municipal`, `estadual`, …) em **todas** as tabelas |
-| Join aluno→contexto | materializado na Gold **ou** fato sem colunas vazias + FK 100% coberta |
-| `id_municipio` | sempre string 7 dígitos |
-| Contexto | todas as redes necessárias (não só municipal) |
-| Visão ML | `alunos_analytic` (ou fato limpo): target + features, sem cols de pipeline / leakage |
-| Qualidade | dicionário + testes documentando o contrato |
+`build_eda_frame` descarta as colunas 100% nulas; o restante é missing legítimo e vai para imputação no pipeline.
 
-No sample alvo, `rede` já está em texto, `id_municipio` ok e o enriquecimento aluno↔contexto bate nas chaves.
+### Lags do indicador INEP
 
-## Mínimo indispensável (Fase 2)
+`lag1_X` no ano N vem do indicador de N-1. Cobertura na Silver:
 
-1. Padronizar `rede` em `alunos_features`, `contexto_territorio` e indicadores.
-2. Garantir `contexto_territorio` com todas as redes usadas no fato.
-3. Refazer join aluno→contexto (preencher NaNs) ou remover colunas vazias do fato + FK coberta.
-4. Manter `id_municipio` como string 7 dígitos.
-5. Dicionário + testes de qualidade do contrato.
-6. (Ideal) Publicar `alunos_analytic` pronta para ML.
+| Coluna de origem | `ano=2023` | `ano=2024` |
+|------------------|-----------|-----------|
+| `taxa_alfabetizacao`, `media_portugues` | preenchidas | preenchidas |
+| `proporcao_aluno_nivel_0..8` | **vazias** | preenchidas |
 
-## Mapa sugerido de `rede` (códigos → texto)
+Por isso `lag1_taxa_alfabetizacao` funciona em 2024 e `lag1_proporcao_aluno_nivel_*` não: o INEP
+só passou a publicar proporções por nível em 2024. Em `ano=2023` todo `lag1_*` é nulo porque 2022
+não foi ingerido. Quando a Gold cobrir 2025, essas colunas passam a ser preenchidas.
 
-Confirmar com o dicionário INEP / Silver antes de fixar em produção:
+## Pendências para a Fase 2
 
-| Código (as-is) | Texto (to-be) |
-|----------------|---------------|
-| `2` | `estadual` |
-| `3` | `municipal` |
-| `4` | (confirmar — aparece no fato; ex.: `privada`) |
+1. Documentar no dicionário que `proporcao_aluno_nivel_*` existe a partir de 2024 e que o lag
+   correspondente só fica disponível em 2025.
+2. Avaliar cobertura IVS/IPEA — confirmar se o gap de 21% é limitação da fonte e documentar no dicionário.
+3. Limpar `rede='0'` na Silver dos indicadores (`municipio_indicadores`, `uf_indicadores`, `ano=2024`).
+4. Rodar `VACUUM` nas tabelas Gold para eliminar os tombstones acumulados.
 
 ## Leakage (Fase 3 — modelagem)
 
