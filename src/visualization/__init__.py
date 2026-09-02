@@ -1,0 +1,31 @@
+from src.visualization.eda import (
+    build_eda_frame,
+    correlation_with_target,
+    feature_columns,
+    load_eda_data,
+    load_sample,
+    plot_categorical_vs_target,
+    plot_correlation_heatmap,
+    plot_numeric_distributions,
+    plot_target_distribution,
+    profile,
+    split_feature_types,
+    target_balance,
+    write_eda_report,
+)
+
+__all__ = [
+    "build_eda_frame",
+    "correlation_with_target",
+    "feature_columns",
+    "load_eda_data",
+    "load_sample",
+    "plot_categorical_vs_target",
+    "plot_correlation_heatmap",
+    "plot_numeric_distributions",
+    "plot_target_distribution",
+    "profile",
+    "split_feature_types",
+    "target_balance",
+    "write_eda_report",
+]
