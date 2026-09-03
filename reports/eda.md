@@ -31,44 +31,44 @@ Compreender o comportamento da Gold, apoiar seleção de features e evitar data 
 ```
               count  proportion
 alfabetizado                   
-1.0            2686      0.5372
-0.0            2314      0.4628
+1.0            2592      0.5184
+0.0            2408      0.4816
 ```
 
 ### Maior % missing (top 10)
 
 ```
-                 column  pct_missing   dtype
-                    ivs        21.30 float64
-meta_alfabetizacao_2024        16.32 float64
-meta_alfabetizacao_2026        15.34 float64
-meta_alfabetizacao_2027        15.34 float64
-meta_alfabetizacao_2025        15.34 float64
-    nivel_alfabetizacao        15.34 float64
-       regiao_municipio        15.34     str
-              _batch_id        15.34     str
-          _source_table        15.34     str
-meta_alfabetizacao_2029        15.34 float64
+                   column  pct_missing   dtype
+                      ivs        21.50 float64
+  meta_alfabetizacao_2024        16.94 float64
+ivs_infraestrutura_urbana        15.82 float64
+  meta_alfabetizacao_2026        15.60 float64
+  meta_alfabetizacao_2025        15.60 float64
+      nivel_alfabetizacao        15.60 float64
+         regiao_municipio        15.60     str
+                _batch_id        15.60     str
+            _source_table        15.60     str
+  meta_alfabetizacao_2029        15.60 float64
 ```
 
 ### Correlação com o target
 
 ```
-nivel_alfabetizacao           0.296944
-meta_alfabetizacao_2029       0.248107
-meta_alfabetizacao_2028       0.247254
-meta_alfabetizacao_2025       0.247247
-meta_alfabetizacao_2026       0.246833
-meta_alfabetizacao_2027       0.246826
-lag1_media_portugues          0.245630
-meta_alfabetizacao_2024       0.243208
-lag1_taxa_alfabetizacao       0.240862
-lag1_uf_media_portugues       0.201523
-lag1_uf_taxa_alfabetizacao    0.185445
-uf_meta_alfabetizacao_2024    0.181993
-uf_meta_alfabetizacao_2027    0.181152
-uf_meta_alfabetizacao_2026    0.181004
-uf_meta_alfabetizacao_2028    0.180968
+nivel_alfabetizacao           0.308271
+meta_alfabetizacao_2029       0.249869
+meta_alfabetizacao_2025       0.249098
+meta_alfabetizacao_2028       0.249082
+meta_alfabetizacao_2026       0.248654
+meta_alfabetizacao_2027       0.248634
+meta_alfabetizacao_2024       0.246881
+lag1_media_portugues          0.246826
+lag1_taxa_alfabetizacao       0.243055
+lag1_uf_media_portugues       0.197272
+lag1_uf_taxa_alfabetizacao    0.188007
+uf_meta_alfabetizacao_2028    0.182436
+uf_meta_alfabetizacao_2029    0.182341
+uf_meta_alfabetizacao_2027    0.181620
+uf_meta_alfabetizacao_2026    0.181358
 ```
 
 ## Outras tabelas (contexto)
@@ -130,6 +130,55 @@ meta_alfabetizacao_2024         5.88
 - `images/eda_nome_regiao_vs_target.png`
 - `images/eda_sigla_uf_vs_target.png`
 
+## Revisão da EDA para a modelagem
+
+Amostra **aleatória** entre row groups (seed fixa). Partição de modelagem: `ano=2024`.
+
+- UFs na amostra: **26**; redes: `['estadual', 'municipal']`
+- Colunas constantes (nunique ≤ 1): `['serie', 'meta_alfabetizacao_2030', 'uf_meta_alfabetizacao_2030', 'brasil_meta_alfabetizacao_2024', 'brasil_meta_alfabetizacao_2025', 'brasil_meta_alfabetizacao_2026', 'brasil_meta_alfabetizacao_2027', 'brasil_meta_alfabetizacao_2028', 'brasil_meta_alfabetizacao_2029', 'brasil_meta_alfabetizacao_2030', 'populacao_ano_ref', 'pib_ano_ref', 'socio_ano_ref']`
+- Features efetivas após limpeza: 17 numéricas, 3 categóricas de baixa cardinalidade, 2 de alta cardinalidade
+
+### `nivel_alfabetizacao` e leakage
+
+`nivel_alfabetizacao` tem no máximo **1** valor distinto por `id_municipio` nesta amostra — é contexto municipal, não o nível do aluno.
+
+O vazamento relevante para o classificador **não** é essa coluna: é o **split aleatório por aluno**. Quase todas as features preditivas são constantes dentro do município. Se o mesmo `id_municipio` aparecer em treino e teste, o modelo memoriza a média municipal.
+
+### Cardinalidade das categóricas
+
+| coluna | n_unique |
+|--------|----------|
+| `rede` | 2 |
+| `nome_regiao` | 5 |
+| `sigla_uf` | 26 |
+| `nome_mesorregiao` | 135 |
+| `nome_microrregiao` | 524 |
+| `nome_municipio` | 1840 |
+
+### Missing em `lag1_*`
+
+```
+lag1_taxa_alfabetizacao       2.2
+lag1_media_portugues          2.2
+lag1_uf_taxa_alfabetizacao    2.0
+lag1_uf_media_portugues       2.0
+```
+
+### Correlação das metas municipais com o target
+
+```
+meta_alfabetizacao_2024    0.247
+meta_alfabetizacao_2025    0.249
+meta_alfabetizacao_2026    0.249
+meta_alfabetizacao_2027    0.249
+meta_alfabetizacao_2028    0.249
+meta_alfabetizacao_2029    0.250
+meta_alfabetizacao_2030      NaN
+```
+
+Metas 2024–2029 tendem a ser colineares (são interpolações da mesma linha de base). No X usamos `meta_alfabetizacao_2024`.
+
+
 ## Hipóteses analíticas
 
 | # | Hipótese | Variáveis | Implicação para modelagem |
@@ -143,7 +192,9 @@ meta_alfabetizacao_2024         5.88
 
 1. Unidade de análise: **aluno** (`GOLD_TABLE`).
 2. Target: **`alfabetizado`** (binário 0/1).
-3. Remover `id_aluno` e metadados `_silver_*` / `_gold_*`; usar `nivel_alfabetizacao` como feature se a Gold expuser.
-4. Pipeline Scikit-learn: imputação numérica + scaling; imputação + one-hot em categóricas.
-5. Revalidar correlações e balanceamento em amostra maior antes do treino final.
-6. Indicadores município/UF: análise agregada e perguntas de negócio.
+3. Remover `id_aluno` e metadados `_silver_*` / `_gold_*`. `nivel_alfabetizacao` é atributo **municipal** (não do aluno) e pode entrar no X sem leakage direto do target individual.
+4. Amostragem **aleatória** entre row groups (não os primeiros registros do parquet).
+5. Split **agrupado por `id_municipio`**: as features preditivas são constantes no município; split aleatório infla a métrica.
+6. Metas 2025–2030 são colineares com 2024 — manter só `meta_alfabetizacao_2024` no X.
+7. Preferir `ano=2024` para ter `lag1_*` preenchidos e coerência temporal (contexto 2023 → resultado 2024).
+8. Indicadores município/UF: análise agregada e perguntas de negócio.
