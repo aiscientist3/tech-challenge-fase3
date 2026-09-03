@@ -1,0 +1,66 @@
+[
+  {
+    "name": "dummy",
+    "best_params": {},
+    "cv_roc_auc": null,
+    "cv_results": null,
+    "n_train": 250643
+  },
+  {
+    "name": "logistic",
+    "best_params": {
+      "clf__class_weight": "balanced",
+      "clf__C": 0.01
+    },
+    "cv_roc_auc": 0.6669152316583907,
+    "cv_results": {
+      "mean_test_score": 0.6669152316583907,
+      "std_test_score": 0.011182816628034106
+    },
+    "n_train": 250643
+  },
+  {
+    "name": "tree",
+    "best_params": {
+      "clf__min_samples_leaf": 100,
+      "clf__max_depth": 8,
+      "clf__ccp_alpha": 0.0001
+    },
+    "cv_roc_auc": 0.662723581287896,
+    "cv_results": {
+      "mean_test_score": 0.662723581287896,
+      "std_test_score": 0.007826588181673576
+    },
+    "n_train": 250643
+  },
+  {
+    "name": "random_forest",
+    "best_params": {
+      "clf__n_estimators": 80,
+      "clf__min_samples_leaf": 30,
+      "clf__max_features": 0.5,
+      "clf__max_depth": 12,
+      "clf__class_weight": "balanced_subsample"
+    },
+    "cv_roc_auc": 0.6682366202973034,
+    "cv_results": {
+      "mean_test_score": 0.6682366202973034,
+      "std_test_score": 0.010700642747305755
+    },
+    "n_train": 250643
+  },
+  {
+    "name": "knn",
+    "best_params": {
+      "clf__weights": "uniform",
+      "clf__n_neighbors": 31,
+      "clf__metric": "manhattan"
+    },
+    "cv_roc_auc": 0.6298810765669437,
+    "cv_results": {
+      "mean_test_score": 0.6298810765669437,
+      "std_test_score": 0.029297737757201462
+    },
+    "n_train": 50000
+  }
+]

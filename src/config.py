@@ -12,6 +12,7 @@ DATA_DIR = ROOT_DIR / "data"
 PROCESSED_DIR = DATA_DIR / "processed"
 IMAGES_DIR = ROOT_DIR / "images"
 REPORTS_DIR = ROOT_DIR / "reports"
+MODELS_DIR = ROOT_DIR / "models"
 
 load_dotenv(ROOT_DIR / ".env")
 
@@ -27,14 +28,12 @@ for _key in (
 DATALAKE_BUCKET = os.getenv("DATALAKE_BUCKET", "tech-challenge-2-datalake-prod")
 GOLD_PREFIX = os.getenv("GOLD_PREFIX", "gold/br_inep_alfabetizacao/").strip("/")
 GOLD_TABLE = os.getenv("GOLD_TABLE", "alunos_features").strip()
-# When Gold is enriched by Fase 2, set GOLD_TABLE=alunos_analytic (or alunos_features if joined in place).
 GOLD_YEAR = os.getenv("GOLD_YEAR", "2024").strip() or None
 
 AWS_DEFAULT_REGION = os.getenv("AWS_DEFAULT_REGION", "us-east-1")
 if AWS_DEFAULT_REGION:
     os.environ.setdefault("AWS_DEFAULT_REGION", AWS_DEFAULT_REGION)
 
-# Delta/Gold tables under gold/br_inep_alfabetizacao/
 GOLD_TABLES = (
     "alunos_features",
     "contexto_territorio",
@@ -43,8 +42,8 @@ GOLD_TABLES = (
 )
 
 TARGET_COL = "alfabetizado"
+GROUP_COL = "id_municipio"
 
-# Excluded from model features (X) — kept in the dataframe for join/scoring.
 ID_COLS = ("id_aluno",)
 PIPELINE_META_COLS = (
     "_ingestion_timestamp",
@@ -56,13 +55,18 @@ PIPELINE_META_COLS = (
     "_batch_id",
     "_join_match",
 )
-
 LEAKAGE_COLS = ID_COLS + PIPELINE_META_COLS
 
-# Gold may expose this after Fase 2; when present, include in X via feature_columns().
 OPTIONAL_MODEL_FEATURES = ("nivel_alfabetizacao",)
 
+RANDOM_STATE = int(os.getenv("RANDOM_STATE", "42"))
 EDA_N_ROWS = int(os.getenv("EDA_N_ROWS", "5000"))
+SAMPLE_N = int(os.getenv("SAMPLE_N", "300000"))
+KNN_MAX_ROWS = int(os.getenv("KNN_MAX_ROWS", "50000"))
+N_CV_SPLITS = int(os.getenv("N_CV_SPLITS", "5"))
+N_ITER_SEARCH = int(os.getenv("N_ITER_SEARCH", "8"))
+TEST_SIZE = float(os.getenv("TEST_SIZE", "0.2"))
+N_JOBS = int(os.getenv("N_JOBS", "-1"))
 
 
 def gold_s3_uri(table: str | None = None, year: str | None = None) -> str:

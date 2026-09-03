@@ -219,6 +219,86 @@ def plot_categorical_vs_target(
     return path
 
 
+def _modeling_review_section(df: pd.DataFrame) -> list[str]:
+    """Review notes that feed the supervised pipeline (constants, collinearity, grain)."""
+    from src.preprocessing.features import build_model_frame, constant_columns, feature_lists
+
+    constants = constant_columns(df)
+    model_df = build_model_frame(df)
+    numeric, low, high = feature_lists(model_df)
+    cat_card = []
+    for col in ["rede", "nome_regiao", "sigla_uf", "nome_mesorregiao", "nome_microrregiao", "nome_municipio"]:
+        if col in df.columns:
+            cat_card.append(f"| `{col}` | {int(df[col].nunique(dropna=True))} |")
+
+    nivel_note = ""
+    if "nivel_alfabetizacao" in df.columns and "id_municipio" in df.columns:
+        max_u = int(df.groupby("id_municipio")["nivel_alfabetizacao"].nunique(dropna=True).max())
+        nivel_note = (
+            f"`nivel_alfabetizacao` tem no máximo **{max_u}** valor distinto por "
+            "`id_municipio` nesta amostra — é contexto municipal, não o nível do aluno."
+        )
+
+    lag_cols = [c for c in df.columns if str(c).startswith("lag1_")]
+    lag_miss = (
+        (df[lag_cols].isna().mean() * 100).round(1).to_string()
+        if lag_cols
+        else "(sem colunas lag1 nesta amostra)"
+    )
+
+    meta_cols = [c for c in df.columns if str(c).startswith("meta_alfabetizacao_")]
+    meta_corr = ""
+    if meta_cols and TARGET_COL in df.columns:
+        meta_corr = (
+            df[meta_cols + [TARGET_COL]]
+            .corr(numeric_only=True)[TARGET_COL]
+            .drop(labels=[TARGET_COL], errors="ignore")
+            .round(3)
+            .to_string()
+        )
+
+    n_uf = int(df["sigla_uf"].nunique(dropna=True)) if "sigla_uf" in df.columns else 0
+    redes = sorted(df["rede"].dropna().astype(str).unique().tolist()) if "rede" in df.columns else []
+
+    return [
+        "",
+        "## Revisão da EDA para a modelagem",
+        "",
+        "Amostra **aleatória** entre row groups (seed fixa). Partição de modelagem: `ano=2024`.",
+        "",
+        f"- UFs na amostra: **{n_uf}**; redes: `{redes}`",
+        f"- Colunas constantes (nunique ≤ 1): `{constants}`",
+        f"- Features efetivas após limpeza: {len(numeric)} numéricas, {len(low)} categóricas de baixa cardinalidade, {len(high)} de alta cardinalidade",
+        "",
+        "### `nivel_alfabetizacao` e leakage",
+        "",
+        nivel_note or "Coluna `nivel_alfabetizacao` ausente nesta amostra.",
+        "",
+        "O vazamento relevante para o classificador **não** é essa coluna: é o **split aleatório por aluno**. Quase todas as features preditivas são constantes dentro do município. Se o mesmo `id_municipio` aparecer em treino e teste, o modelo memoriza a média municipal.",
+        "",
+        "### Cardinalidade das categóricas",
+        "",
+        "| coluna | n_unique |",
+        "|--------|----------|",
+        *cat_card,
+        "",
+        "### Missing em `lag1_*`",
+        "",
+        "```",
+        lag_miss,
+        "```",
+        "",
+        "### Correlação das metas municipais com o target",
+        "",
+        "```",
+        meta_corr or "(sem metas numéricas)",
+        "```",
+        "",
+        "Metas 2024–2029 tendem a ser colineares (são interpolações da mesma linha de base). No X usamos `meta_alfabetizacao_2024`.",
+        "",
+    ]
+
+
 def write_eda_report(
     tables: dict[str, pd.DataFrame],
     image_paths: list[Path],
@@ -339,6 +419,9 @@ def write_eda_report(
         rel = img.as_posix().split("images/")[-1] if "images" in img.as_posix() else img.name
         lines.append(f"- `images/{rel}`")
 
+    if eda_df is not None:
+        lines.extend(_modeling_review_section(eda_df))
+
     lines.extend(
         [
             "",
@@ -355,10 +438,12 @@ def write_eda_report(
             "",
             "1. Unidade de análise: **aluno** (`GOLD_TABLE`).",
             "2. Target: **`alfabetizado`** (binário 0/1).",
-            "3. Remover `id_aluno` e metadados `_silver_*` / `_gold_*`; usar `nivel_alfabetizacao` como feature se a Gold expuser.",
-            "4. Pipeline Scikit-learn: imputação numérica + scaling; imputação + one-hot em categóricas.",
-            "5. Revalidar correlações e balanceamento em amostra maior antes do treino final.",
-            "6. Indicadores município/UF: análise agregada e perguntas de negócio.",
+            "3. Remover `id_aluno` e metadados `_silver_*` / `_gold_*`. `nivel_alfabetizacao` é atributo **municipal** (não do aluno) e pode entrar no X sem leakage direto do target individual.",
+            "4. Amostragem **aleatória** entre row groups (não os primeiros registros do parquet).",
+            "5. Split **agrupado por `id_municipio`**: as features preditivas são constantes no município; split aleatório infla a métrica.",
+            "6. Metas 2025–2030 são colineares com 2024 — manter só `meta_alfabetizacao_2024` no X.",
+            "7. Preferir `ano=2024` para ter `lag1_*` preenchidos e coerência temporal (contexto 2023 → resultado 2024).",
+            "8. Indicadores município/UF: análise agregada e perguntas de negócio.",
             "",
         ]
     )
