@@ -8,12 +8,14 @@ Classificação binária: prever se o aluno será considerado **alfabetizado** (
 
 ## Pipeline
 
-1. **Imputação** — numéricas: mediana + indicador de ausência; categóricas: `DESCONHECIDO`.
-2. **Transformação** — logística/KNN: `StandardScaler` + One-Hot (rede, região, UF) + Target Encoding (meso/microrregião). Árvores: Ordinal + Frequency Encoding, sem scaling.
-3. **Data leakage** — drop de IDs/metadados; split agrupado por `id_municipio`; pré-processamento só no treino; Target Encoding com CV interno; features de 2023 prevendo 2024; holdout tocado uma vez.
+1. **Imputação** — numéricas: mediana; categóricas: `DESCONHECIDO`.
+2. **Transformação única** — `StandardScaler` + One-Hot (`rede`, região, UF). Sem Target/Frequency Encoding.
+3. **Data leakage** — drop de IDs/metadados e de `nivel_alfabetizacao` (agregado same-year); split agrupado por `id_municipio`; pré-processamento só no treino; features de 2023 prevendo 2024; holdout tocado uma vez.
 4. **Integração** — `Pipeline(prep, clf)` serializado em `models/best_model.joblib`.
 5. **Treino/validação** — `RandomizedSearchCV` + `StratifiedGroupKFold` (5 folds, ROC AUC).
 6. **Replicabilidade** — `RANDOM_STATE=42`, `requirements.txt`, amostra cacheada, `python scripts/run_modeling.py`.
+
+> Relatório gerado com o preprocessamento anterior (mais rico). Reexecute `python scripts/run_modeling.py` para atualizar métricas com o pipeline simplificado.
 
 Features no X: **22**. Municípios treino/teste: **4392 / 1099** (overlap = 0).
 

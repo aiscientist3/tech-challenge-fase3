@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import numpy as np
 import pandas as pd
 
 from src.config import GROUP_COL, LEAKAGE_COLS, TARGET_COL
@@ -11,10 +10,13 @@ from src.config import GROUP_COL, LEAKAGE_COLS, TARGET_COL
 ALWAYS_DROP = frozenset(LEAKAGE_COLS) | {
     "peso_aluno",  # INEP sampling weight, not a student attribute
     "nome_municipio",  # same grain as GROUP_COL; would reintroduce memorization
+    # Same-year municipal aggregate — correlates strongly with the target and
+    # risks outcome leakage at municipal grain. Prefer lag1_* instead.
+    "nivel_alfabetizacao",
 }
 
 # Kept on the modeling frame for reports / ranking, never used as X.
-CONTEXT_COLS = frozenset({"meta_alfabetizacao_2025"})
+CONTEXT_COLS = frozenset({"meta_alfabetizacao_2025", "nivel_alfabetizacao"})
 
 # Known-constant or redundant Gold columns (also detected at runtime).
 REDUNDANT_COLS = (
@@ -45,10 +47,12 @@ REDUNDANT_COLS = (
     "uf_meta_alfabetizacao_2029",
     "uf_meta_alfabetizacao_2030",
     "pib",  # collinear with populacao / pib_per_capita
+    # High-cardinality geography — one-hot explodes; not needed for the baseline.
+    "nome_mesorregiao",
+    "nome_microrregiao",
 )
 
-LOW_CARD_CATS = ("rede", "nome_regiao", "sigla_uf")
-HIGH_CARD_CATS = ("nome_mesorregiao", "nome_microrregiao")
+CATEGORICAL_COLS = ("rede", "nome_regiao", "sigla_uf")
 
 NUMERIC_CANDIDATES = (
     "lag1_taxa_alfabetizacao",
@@ -57,7 +61,6 @@ NUMERIC_CANDIDATES = (
     "lag1_uf_media_portugues",
     "meta_alfabetizacao_2024",
     "uf_meta_alfabetizacao_2024",
-    "nivel_alfabetizacao",
     "populacao",
     "pib_per_capita",
     "ivs",
@@ -67,12 +70,7 @@ NUMERIC_CANDIDATES = (
     "capital_uf",
     "amazonia_legal",
     "gap_meta",
-    "dist_uf",
-    "log_populacao",
-    "log_pib_per_capita",
 )
-
-LOG_SOURCE = ("populacao", "pib_per_capita")
 
 
 def drop_all_null_columns(df: pd.DataFrame) -> pd.DataFrame:
@@ -90,15 +88,10 @@ def constant_columns(df: pd.DataFrame, extra_exclude: set[str] | None = None) ->
 
 
 def add_derived_features(df: pd.DataFrame) -> pd.DataFrame:
+    """Only gap_meta: distance between 2024 goal and prior-year literacy rate."""
     out = df.copy()
     if {"meta_alfabetizacao_2024", "lag1_taxa_alfabetizacao"}.issubset(out.columns):
         out["gap_meta"] = out["meta_alfabetizacao_2024"] - out["lag1_taxa_alfabetizacao"]
-    if {"lag1_taxa_alfabetizacao", "lag1_uf_taxa_alfabetizacao"}.issubset(out.columns):
-        out["dist_uf"] = out["lag1_taxa_alfabetizacao"] - out["lag1_uf_taxa_alfabetizacao"]
-    if "populacao" in out.columns:
-        out["log_populacao"] = np.log1p(out["populacao"].clip(lower=0))
-    if "pib_per_capita" in out.columns:
-        out["log_pib_per_capita"] = np.log1p(out["pib_per_capita"].clip(lower=0))
     return out
 
 
@@ -110,11 +103,6 @@ def build_model_frame(df: pd.DataFrame) -> pd.DataFrame:
     out = add_derived_features(out)
     constants = constant_columns(out)
     drop = [c for c in (*REDUNDANT_COLS, *constants) if c in out.columns]
-    # Keep raw populacao / pib_per_capita out of X by dropping after logs exist
-    for raw in LOG_SOURCE:
-        log_name = f"log_{raw}"
-        if raw in out.columns and log_name in out.columns:
-            drop.append(raw)
     drop = list(dict.fromkeys(drop))
     if drop:
         out = out.drop(columns=drop)
@@ -123,7 +111,11 @@ def build_model_frame(df: pd.DataFrame) -> pd.DataFrame:
 
 
 def feature_lists(df: pd.DataFrame) -> tuple[list[str], list[str], list[str]]:
-    """Return (numeric, low-card cat, high-card cat) present in the frame."""
+    """
+    Return (numeric, categorical, high_card).
+
+    `high_card` is always empty in the simplified pipeline (kept for API stability).
+    """
     drop = set(ALWAYS_DROP) | set(CONTEXT_COLS) | {TARGET_COL, GROUP_COL}
     available = [c for c in df.columns if c not in drop and not str(c).startswith("_")]
     numeric = [c for c in NUMERIC_CANDIDATES if c in available]
@@ -131,32 +123,26 @@ def feature_lists(df: pd.DataFrame) -> tuple[list[str], list[str], list[str]]:
         c
         for c in available
         if c not in numeric
-        and c not in LOW_CARD_CATS
-        and c not in HIGH_CARD_CATS
+        and c not in CATEGORICAL_COLS
         and pd.api.types.is_numeric_dtype(df[c])
     ]
     numeric = numeric + extra_num
-    low = [c for c in LOW_CARD_CATS if c in available]
-    high = [c for c in HIGH_CARD_CATS if c in available]
+    categorical = [c for c in CATEGORICAL_COLS if c in available]
     leftover_cat = [
         c
         for c in available
-        if c not in numeric and c not in low and c not in high
+        if c not in numeric
+        and c not in categorical
         and not pd.api.types.is_numeric_dtype(df[c])
+        and int(df[c].nunique(dropna=True)) <= 30
     ]
-    # leftover cats of small cardinality join one-hot / ordinal; large go frequency
-    for c in leftover_cat:
-        nuniq = int(df[c].nunique(dropna=True))
-        if nuniq <= 30:
-            low.append(c)
-        else:
-            high.append(c)
-    return numeric, low, high
+    categorical = categorical + leftover_cat
+    return numeric, categorical, []
 
 
 def model_feature_columns(df: pd.DataFrame) -> list[str]:
-    numeric, low, high = feature_lists(df)
-    return numeric + low + high
+    numeric, categorical, high = feature_lists(df)
+    return numeric + categorical + high
 
 
 def xy_groups(df: pd.DataFrame) -> tuple[pd.DataFrame, pd.Series, pd.Series]:

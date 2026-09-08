@@ -15,7 +15,7 @@ from src.preprocessing.features import feature_lists
 def _logit_pipeline(numeric, low, high) -> Pipeline:
     return Pipeline(
         [
-            ("prep", build_preprocessor(numeric, low, high, family="linear")),
+            ("prep", build_preprocessor(numeric, low, high)),
             (
                 "clf",
                 LogisticRegression(max_iter=1000, solver="lbfgs", random_state=RANDOM_STATE),

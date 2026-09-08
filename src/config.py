@@ -27,7 +27,7 @@ for _key in (
 
 DATALAKE_BUCKET = os.getenv("DATALAKE_BUCKET", "tech-challenge-2-datalake-prod")
 GOLD_PREFIX = os.getenv("GOLD_PREFIX", "gold/br_inep_alfabetizacao/").strip("/")
-GOLD_TABLE = os.getenv("GOLD_TABLE", "alunos_features").strip()
+GOLD_TABLE = os.getenv("GOLD_TABLE", "alunos_analytic").strip()
 GOLD_YEAR = os.getenv("GOLD_YEAR", "2024").strip() or None
 
 AWS_DEFAULT_REGION = os.getenv("AWS_DEFAULT_REGION", "us-east-1")
@@ -35,6 +35,7 @@ if AWS_DEFAULT_REGION:
     os.environ.setdefault("AWS_DEFAULT_REGION", AWS_DEFAULT_REGION)
 
 GOLD_TABLES = (
+    "alunos_analytic",
     "alunos_features",
     "contexto_territorio",
     "indicador_crianca_alfabetizada_municipio",
@@ -57,7 +58,7 @@ PIPELINE_META_COLS = (
 )
 LEAKAGE_COLS = ID_COLS + PIPELINE_META_COLS
 
-OPTIONAL_MODEL_FEATURES = ("nivel_alfabetizacao",)
+OPTIONAL_MODEL_FEATURES = ()
 
 RANDOM_STATE = int(os.getenv("RANDOM_STATE", "42"))
 EDA_N_ROWS = int(os.getenv("EDA_N_ROWS", "5000"))
