@@ -31,14 +31,6 @@ from src.preprocessing.features import feature_lists
 
 logger = logging.getLogger(__name__)
 
-FAMILIES = {
-    "dummy": "linear",
-    "logistic": "linear",
-    "tree": "tree",
-    "random_forest": "tree",
-    "knn": "linear",
-}
-
 
 def _estimator(name: str):
     if name == "dummy":
@@ -95,10 +87,9 @@ def build_model_pipeline(
     name: str,
     numeric: list[str],
     low_card: list[str],
-    high_card: list[str],
+    high_card: list[str] | None = None,
 ) -> Pipeline:
-    family = FAMILIES[name]
-    prep = build_preprocessor(numeric, low_card, high_card, family=family)
+    prep = build_preprocessor(numeric, low_card, high_card or [])
     return Pipeline([("prep", prep), ("clf", _estimator(name))])
 
 

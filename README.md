@@ -18,7 +18,8 @@ Camada Gold `s3://{DATALAKE_BUCKET}/gold/br_inep_alfabetizacao/`:
 
 | Tabela | Papel |
 |--------|--------|
-| `alunos_features` | fato de modelagem (target + contexto já joinado) |
+| `alunos_analytic` | fato de modelagem (target + contexto, sem colunas de pipeline/leakage) |
+| `alunos_features` | alternativa com metadados de pipeline |
 | `contexto_territorio` | apoio EDA |
 | `indicador_crianca_alfabetizada_municipio` | metas, gaps, risco municipal |
 | `indicador_crianca_alfabetizada_uf` | visão estadual |
@@ -47,9 +48,9 @@ Saídas: `reports/eda.md`, `images/eda_*.png`. A amostragem sorteia row groups (
 
 ## Etapas de modelagem
 
-1. Imputação numérica (mediana + indicador de ausência) e categórica (`DESCONHECIDO`).
-2. Transformação por família de modelo: scaling + one-hot + target encoding (logística/KNN); ordinal + frequency encoding (árvores).
-3. Data leakage: drop de IDs/metadados; split agrupado por `id_municipio`; pré-processamento só no treino (dentro do `Pipeline`); Target Encoding cross-fitted; coerência 2023→2024; holdout único.
+1. Imputação numérica (mediana) e categórica (`DESCONHECIDO`).
+2. Transformação única: `StandardScaler` nas numéricas + One-Hot nas categóricas (`rede`, região, UF).
+3. Data leakage: drop de IDs/metadados; exclusão de `nivel_alfabetizacao` (agregado municipal contemporâneo); split agrupado por `id_municipio`; pré-processamento só no treino (dentro do `Pipeline`); coerência 2023→2024; holdout único.
 4. `Pipeline(prep, clf)` — o mesmo objeto valida e seria o artefato de produção (`models/*.joblib`).
 5. `RandomizedSearchCV` + `StratifiedGroupKFold` (scoring `roc_auc`).
 6. Seed única, versões em `requirements.txt`, amostra cacheada.
@@ -65,26 +66,30 @@ Problema de **classificação**. Candidatos: Random Forest e Regressão logísti
 
 **Escolhido: regressão logística** (`C=0,01`, `class_weight=balanced`). Empate técnico com a Random Forest na CV agrupada (AUC 0,667 vs 0,668, diferença < 0,5 pp); a logística é mais simples e entrega odds ratio. Holdout agrupado: ROC AUC **0,684**, PR AUC **0,717**, F1 **0,656**.
 
+> Métricas acima referem-se ao experimento anterior (preprocessamento mais rico). Reexecute `python scripts/run_modeling.py` após esta simplificação para atualizar os números.
+
 ## Métricas de avaliação
 
-ROC AUC, PR AUC, F1, precisão, recall, balanced accuracy, Brier, matriz de confusão, curvas ROC/PR, calibração, curva de aprendizado. Comparação split aleatório vs agrupado: 4.854 municípios apareceriam nos dois lados num split por aluno; o relatório usa só o split agrupado (overlap 0).
+ROC AUC, PR AUC, F1, precisão, recall, balanced accuracy, Brier, matriz de confusão, curvas ROC/PR, calibração, curva de aprendizado. Comparação split aleatório vs agrupado: milhares de municípios apareceriam nos dois lados num split por aluno; o relatório usa só o split agrupado (overlap 0).
 
 Números e tabelas: [`reports/modelagem.md`](reports/modelagem.md), [`reports/model_metrics.json`](reports/model_metrics.json).
 
 ## Interpretação e insights
 
-Permutation importance: `nivel_alfabetizacao` (municipal), `rede`, metas e `lag1_*` dominam; IVS/PIB quase não adicionam AUC depois do histórico. SHAP da floresta em `images/model_shap_summary.png`.
+Permutation importance tipicamente destaca `rede`, metas e `lag1_*`. SHAP da floresta em `images/model_shap_summary.png` (gerado ao rodar o script).
 
-No holdout, **690 de 1.099** municípios têm taxa prevista abaixo da meta 2024; maior risco médio na região Norte (`reports/risco_municipal.csv`, `reports/risco_regional.csv`).
+Ranking municipal de risco no holdout: `reports/risco_municipal.csv`, `reports/risco_regional.csv`.
 
-O teto de performance é o **risco municipal**: não há atributos individuais do aluno. Correlação máxima com o target ~0,31; AUC ~0,68 no holdout agrupado.
+O teto de performance é o **risco municipal**: não há atributos individuais do aluno. AUC esperado ~0,65–0,70 no holdout agrupado.
 
 ## Limitações
 
 - Gold sem features no grain do aluno (além de rede/série; série é constante = 2).
+- `nivel_alfabetizacao` excluído do X por risco de leakage same-year.
 - `lag1_proporcao_aluno_nivel_*` 100% nulo.
 - Amostra de 300k, não os 2,1M da partição.
 - KNN em no máximo 50k linhas.
+- Preprocessamento deliberadamente simples (sem Target/Frequency Encoding).
 
 ## Aplicação prática para políticas públicas
 

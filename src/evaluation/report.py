@@ -38,11 +38,12 @@ def write_modelagem_report(
         "",
         "## Pipeline",
         "",
-        "1. Imputação numérica (`SimpleImputer` mediana + indicador de ausência) e categórica (`DESCONHECIDO`).",
-        "2. Transformação: `StandardScaler` + One-Hot + Target Encoding (modelos lineares/KNN); "
-        "Ordinal + Frequency Encoding (árvores), sem scaling.",
-        "3. Data leakage: exclusão de IDs/metadados; split agrupado por `id_municipio`; pré-processamento "
-        "dentro do `Pipeline`; Target Encoding cross-fitted; features de 2023 prevendo 2024; holdout único.",
+        "1. Imputação numérica (`SimpleImputer` mediana) e categórica (`DESCONHECIDO`).",
+        "2. Transformação única: `StandardScaler` nas numéricas + One-Hot nas categóricas "
+        "(`rede`, região, UF).",
+        "3. Data leakage: exclusão de IDs/metadados e de `nivel_alfabetizacao` (agregado municipal "
+        "contemporâneo); split agrupado por `id_municipio`; pré-processamento dentro do `Pipeline`; "
+        "features de 2023 prevendo 2024; holdout único.",
         "4. `Pipeline(prep, clf)` serializado em `models/*.joblib`.",
         "5. `RandomizedSearchCV` + `StratifiedGroupKFold` (ROC AUC).",
         "6. Seed única, versões fixadas, amostra cacheada em `data/processed/`.",
@@ -95,9 +96,11 @@ def write_modelagem_report(
         "## Limitações",
         "",
         "- Não há atributos individuais do aluno além da rede/série; o teto de performance é o do risco municipal.",
+        "- `nivel_alfabetizacao` foi excluído do X por risco de leakage same-year.",
         "- `lag1_proporcao_aluno_nivel_*` veio 100% nulo na Gold e foi descartado.",
         "- Amostra de 300 mil linhas (não a partição completa de 2,1 milhões).",
         "- KNN treinado em no máximo 50 mil linhas por custo computacional.",
+        "- Preprocessamento deliberadamente simples (sem Target/Frequency Encoding).",
         "",
     ]
     path.write_text("\n".join(lines), encoding="utf-8")
