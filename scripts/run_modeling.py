@@ -38,7 +38,13 @@ from src.evaluation.metrics import (  # noqa: E402
     save_metrics,
 )
 from src.evaluation.report import write_modelagem_report  # noqa: E402
-from src.evaluation.strategic import municipal_risk_table, save_risk_tables  # noqa: E402
+from src.evaluation.strategic import (  # noqa: E402
+    cluster_municipalities,
+    municipal_risk_table,
+    region_cluster_crosstab,
+    save_cluster_tables,
+    save_risk_tables,
+)
 from src.modeling.split import grouped_holdout  # noqa: E402
 from src.modeling.train import (  # noqa: E402
     fit_candidate,
@@ -50,6 +56,7 @@ from src.preprocessing.features import build_model_frame, feature_lists, xy_grou
 from src.preprocessing.load_s3 import load_gold_sample_cached  # noqa: E402
 from src.visualization.model_plots import (  # noqa: E402
     plot_calibration,
+    plot_clusters,
     plot_confusion,
     plot_importance,
     plot_leakage_compare,
@@ -196,7 +203,11 @@ def run() -> None:
         scored_test[TARGET_COL],
         scored_test["y_score"],
     )
+    risk, cluster_profile, cluster_diag = cluster_municipalities(risk)
+    logger.info("clusters: %s", cluster_diag)
     save_risk_tables(risk)
+    save_cluster_tables(risk, cluster_profile)
+    plot_clusters(risk, region_cluster_crosstab(risk))
 
     champ_metrics = {**champ_fit["holdout"], "champion": champion}
     save_metrics(
@@ -206,6 +217,7 @@ def run() -> None:
             "leakage": leakage,
             "champion_metrics": champ_metrics,
             "best_params": champ_fit.get("best_params"),
+            "clusters": cluster_diag,
         }
     )
     write_modelagem_report(
@@ -218,6 +230,8 @@ def run() -> None:
         n_features=X.shape[1],
         n_municipios_train=int(gtr.nunique()),
         n_municipios_test=int(gte.nunique()),
+        cluster_profile=cluster_profile,
+        cluster_diag=cluster_diag,
     )
     logger.info("done. reports in %s images in %s", REPORTS_DIR, IMAGES_DIR)
 

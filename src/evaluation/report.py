@@ -9,6 +9,31 @@ import pandas as pd
 from src.config import GOLD_TABLE, GOLD_YEAR, REPORTS_DIR, SAMPLE_N
 
 
+def _cluster_section(
+    profile: "pd.DataFrame | None",
+    diag: dict | None,
+) -> list[str]:
+    """Section answering 'which regions share similar patterns'."""
+    if profile is None or profile.empty or not diag:
+        return []
+    return [
+        "### Regiões com padrões semelhantes (KMeans)",
+        "",
+        f"Agrupamento de municípios por perfil educacional e socioeconômico em **k={diag.get('k_escolhido')}** "
+        f"clusters (silhouette {diag.get('silhouette')}; testados {diag.get('silhouette_por_k')}). "
+        f"Variáveis: {', '.join(diag.get('features', []))} — nenhuma delas é geográfica, "
+        "portanto a composição regional de cada cluster é resultado, não premissa.",
+        "",
+        "```",
+        profile.to_string(index=False),
+        "```",
+        "",
+        "Perfil por cluster em `reports/clusters_perfil.csv`, distribuição por região em "
+        "`reports/clusters_por_regiao.csv`, figura em `images/model_clusters.png`.",
+        "",
+    ]
+
+
 def write_modelagem_report(
     compare: pd.DataFrame,
     champion: str,
@@ -20,6 +45,8 @@ def write_modelagem_report(
     n_municipios_train: int,
     n_municipios_test: int,
     path: Path | None = None,
+    cluster_profile: pd.DataFrame | None = None,
+    cluster_diag: dict | None = None,
 ) -> Path:
     path = path or (REPORTS_DIR / "modelagem.md")
     path.parent.mkdir(parents=True, exist_ok=True)
@@ -93,6 +120,7 @@ def write_modelagem_report(
         "Ranking municipal de risco em `reports/risco_municipal.csv` (probabilidade média prevista, "
         "gap vs `meta_alfabetizacao_2024`/`2025`). Perfil regional em `reports/risco_regional.csv`.",
         "",
+        *_cluster_section(cluster_profile, cluster_diag),
         "## Limitações",
         "",
         "- Não há atributos individuais do aluno além da rede/série; o teto de performance é o do risco municipal.",

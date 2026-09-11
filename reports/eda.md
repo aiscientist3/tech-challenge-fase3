@@ -12,6 +12,7 @@ Compreender o comportamento da Gold, apoiar seleção de features e evitar data 
 
 | Tabela | Linhas | Colunas |
 |--------|--------|---------|
+| `alunos_analytic` | 5000 | 71 |
 | `alunos_features` | 5000 | 79 |
 | `contexto_territorio` | 6543 | 81 |
 | `indicador_crianca_alfabetizada_municipio` | 6543 | 44 |
@@ -73,6 +74,22 @@ uf_meta_alfabetizacao_2026    0.181358
 
 ## Outras tabelas (contexto)
 
+### `alunos_analytic`
+
+- Shape amostra: `(5000, 71)`
+- Colunas (amostra): `['id_aluno', 'id_municipio', 'rede', 'alfabetizado', 'peso_aluno', 'meta_alfabetizacao_2024', 'meta_alfabetizacao_2025', 'meta_alfabetizacao_2026', 'meta_alfabetizacao_2027', 'meta_alfabetizacao_2028', 'meta_alfabetizacao_2029', 'meta_alfabetizacao_2030']...`
+
+Missing (top 5):
+
+```
+                         column  pct_missing
+lag1_uf_proporcao_aluno_nivel_4        100.0
+lag1_uf_proporcao_aluno_nivel_1        100.0
+lag1_uf_proporcao_aluno_nivel_2        100.0
+lag1_uf_proporcao_aluno_nivel_0        100.0
+   lag1_proporcao_aluno_nivel_8        100.0
+```
+
 ### `contexto_territorio`
 
 - Shape amostra: `(6543, 81)`
@@ -123,12 +140,13 @@ meta_alfabetizacao_2024         5.88
 
 ## Figuras
 
-- `images/eda_target_distribution.png`
-- `images/eda_numeric_distributions.png`
 - `images/eda_correlation_heatmap.png`
-- `images/eda_rede_vs_target.png`
 - `images/eda_nome_regiao_vs_target.png`
+- `images/eda_numeric_distributions.png`
+- `images/eda_rede_vs_target.png`
 - `images/eda_sigla_uf_vs_target.png`
+- `images/eda_target_distribution.png`
+- `images/eda_uf_taxa.png`
 
 ## Revisão da EDA para a modelagem
 
@@ -136,13 +154,13 @@ Amostra **aleatória** entre row groups (seed fixa). Partição de modelagem: `a
 
 - UFs na amostra: **26**; redes: `['estadual', 'municipal']`
 - Colunas constantes (nunique ≤ 1): `['serie', 'meta_alfabetizacao_2030', 'uf_meta_alfabetizacao_2030', 'brasil_meta_alfabetizacao_2024', 'brasil_meta_alfabetizacao_2025', 'brasil_meta_alfabetizacao_2026', 'brasil_meta_alfabetizacao_2027', 'brasil_meta_alfabetizacao_2028', 'brasil_meta_alfabetizacao_2029', 'brasil_meta_alfabetizacao_2030', 'populacao_ano_ref', 'pib_ano_ref', 'socio_ano_ref']`
-- Features efetivas após limpeza: 17 numéricas, 3 categóricas de baixa cardinalidade, 2 de alta cardinalidade
+- Features efetivas após limpeza: 15 numéricas, 3 categóricas de baixa cardinalidade, 0 de alta cardinalidade
 
 ### `nivel_alfabetizacao` e leakage
 
 `nivel_alfabetizacao` tem no máximo **1** valor distinto por `id_municipio` nesta amostra — é contexto municipal, não o nível do aluno.
 
-O vazamento relevante para o classificador **não** é essa coluna: é o **split aleatório por aluno**. Quase todas as features preditivas são constantes dentro do município. Se o mesmo `id_municipio` aparecer em treino e teste, o modelo memoriza a média municipal.
+O vazamento relevante para o classificador **não** é só o grão da coluna: é o **split aleatório por aluno** e o uso de agregados **do mesmo ano** do target. Quase todas as features preditivas são constantes dentro do município. Se o mesmo `id_municipio` aparecer em treino e teste, o modelo memoriza a média municipal. `nivel_alfabetizacao` contemporâneo fica **fora do X**.
 
 ### Cardinalidade das categóricas
 
@@ -192,9 +210,10 @@ Metas 2024–2029 tendem a ser colineares (são interpolações da mesma linha d
 
 1. Unidade de análise: **aluno** (`GOLD_TABLE`).
 2. Target: **`alfabetizado`** (binário 0/1).
-3. Remover `id_aluno` e metadados `_silver_*` / `_gold_*`. `nivel_alfabetizacao` é atributo **municipal** (não do aluno) e pode entrar no X sem leakage direto do target individual.
+3. Remover `id_aluno` e metadados `_silver_*` / `_gold_*`. `nivel_alfabetizacao` é atributo municipal contemporâneo — **fora do X** (usar `lag1_*`).
 4. Amostragem **aleatória** entre row groups (não os primeiros registros do parquet).
-5. Split **agrupado por `id_municipio`**: as features preditivas são constantes no município; split aleatório infla a métrica.
+5. Split **agrupado por `id_municipio`**: as features preditivas são constantes no município; split aleatório é inválido para a pergunta de negócio.
 6. Metas 2025–2030 são colineares com 2024 — manter só `meta_alfabetizacao_2024` no X.
 7. Preferir `ano=2024` para ter `lag1_*` preenchidos e coerência temporal (contexto 2023 → resultado 2024).
-8. Indicadores município/UF: análise agregada e perguntas de negócio.
+8. Preprocessamento único: mediana + scaling + one-hot (sem Target/Frequency Encoding).
+9. Indicadores município/UF: análise agregada e perguntas de negócio.

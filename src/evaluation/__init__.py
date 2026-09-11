@@ -1,10 +1,11 @@
 from src.evaluation.interpretability import logistic_coefficients, permutation_importances
 from src.evaluation.leakage import compare_random_vs_grouped
 from src.evaluation.metrics import classification_metrics, predict_scores
-from src.evaluation.strategic import municipal_risk_table
+from src.evaluation.strategic import cluster_municipalities, municipal_risk_table
 
 __all__ = [
     "classification_metrics",
+    "cluster_municipalities",
     "compare_random_vs_grouped",
     "logistic_coefficients",
     "municipal_risk_table",

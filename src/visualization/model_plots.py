@@ -130,6 +130,45 @@ def plot_learning_curve(estimator, X, y, groups=None, path: Path | None = None) 
         return None
 
 
+def plot_clusters(
+    risk: pd.DataFrame,
+    crosstab: pd.DataFrame,
+    path: Path | None = None,
+) -> Path | None:
+    """Cluster profile (risk vs IVS) and how regions distribute across clusters."""
+    path = _path("model_clusters.png", path)
+    if "cluster" not in risk.columns or risk["cluster"].isna().all():
+        return None
+
+    work = risk.dropna(subset=["cluster"])
+    fig, axes = plt.subplots(1, 2, figsize=(13, 5))
+
+    x_col = "ivs" if "ivs" in work.columns else "lag1_taxa_alfabetizacao"
+    for c in sorted(work["cluster"].unique()):
+        sub = work[work["cluster"] == c]
+        axes[0].scatter(sub[x_col], sub["taxa_prevista"], s=12, alpha=0.6, label=f"cluster {int(c)}")
+    axes[0].set_xlabel(x_col)
+    axes[0].set_ylabel("taxa de alfabetização prevista")
+    axes[0].set_title("Perfil dos municípios por cluster")
+    axes[0].legend(fontsize=8)
+
+    if not crosstab.empty:
+        idx = crosstab.set_index("nome_regiao")
+        bottom = np.zeros(len(idx))
+        for col in idx.columns:
+            axes[1].bar(idx.index, idx[col], bottom=bottom, label=col)
+            bottom += idx[col].to_numpy()
+        axes[1].set_ylabel("proporção de municípios")
+        axes[1].set_title("Composição de clusters por região")
+        axes[1].legend(fontsize=8)
+        axes[1].tick_params(axis="x", rotation=30)
+
+    fig.tight_layout()
+    fig.savefig(path, dpi=130)
+    plt.close(fig)
+    return path
+
+
 def plot_leakage_compare(random_auc: float, grouped_auc: float, path: Path | None = None) -> Path:
     path = _path("model_leakage_compare.png", path)
     fig, ax = plt.subplots(figsize=(6, 4))

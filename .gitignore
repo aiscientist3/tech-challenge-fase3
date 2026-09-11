@@ -13,3 +13,4 @@ part-*.parquet
 *.joblib
 .DS_Store
 images/*
+!images/*.png
