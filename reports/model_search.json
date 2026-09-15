@@ -1,0 +1,66 @@
+[
+  {
+    "name": "dummy",
+    "best_params": {},
+    "cv_roc_auc": null,
+    "cv_results": null,
+    "n_train": 250643
+  },
+  {
+    "name": "logistic",
+    "best_params": {
+      "clf__class_weight": "balanced",
+      "clf__C": 0.01
+    },
+    "cv_roc_auc": 0.6442749075898015,
+    "cv_results": {
+      "mean_test_score": 0.6442749075898015,
+      "std_test_score": 0.020126905470152067
+    },
+    "n_train": 250643
+  },
+  {
+    "name": "tree",
+    "best_params": {
+      "clf__min_samples_leaf": 100,
+      "clf__max_depth": 8,
+      "clf__ccp_alpha": 0.0001
+    },
+    "cv_roc_auc": 0.6455309654458913,
+    "cv_results": {
+      "mean_test_score": 0.6455309654458913,
+      "std_test_score": 0.012728042314992517
+    },
+    "n_train": 250643
+  },
+  {
+    "name": "random_forest",
+    "best_params": {
+      "clf__n_estimators": 80,
+      "clf__min_samples_leaf": 80,
+      "clf__max_features": "sqrt",
+      "clf__max_depth": 16,
+      "clf__class_weight": "balanced_subsample"
+    },
+    "cv_roc_auc": 0.652687215708076,
+    "cv_results": {
+      "mean_test_score": 0.652687215708076,
+      "std_test_score": 0.01260431565674243
+    },
+    "n_train": 250643
+  },
+  {
+    "name": "knn",
+    "best_params": {
+      "clf__weights": "uniform",
+      "clf__n_neighbors": 31,
+      "clf__metric": "manhattan"
+    },
+    "cv_roc_auc": 0.621505238997018,
+    "cv_results": {
+      "mean_test_score": 0.621505238997018,
+      "std_test_score": 0.019202484802746965
+    },
+    "n_train": 50000
+  }
+]
